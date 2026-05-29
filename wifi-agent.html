@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFi Connection Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #00d9ff;
+            --secondary: #6c5ce7;
+            --accent: #ff6b6b;
+            --dark-bg: #0a0e27;
+            --card-bg: #1a1f3a;
+            --text-primary: #e0e6ff;
+            --text-secondary: #a0aec0;
+            --success: #2ecc71;
+            --warning: #f39c12;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #1a1f3a 100%);
+            color: var(--text-primary);
+            overflow-x: hidden;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Animated background grid */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(0deg, transparent 24%, rgba(0, 217, 255, 0.05) 25%, rgba(0, 217, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 217, 255, 0.05) 75%, rgba(0, 217, 255, 0.05) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(0, 217, 255, 0.05) 25%, rgba(0, 217, 255, 0.05) 26%, transparent 27%, transparent 74%, rgba(0, 217, 255, 0.05) 75%, rgba(0, 217, 255, 0.05) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+            animation: gridShift 20s linear infinite;
+        }
+
+        @keyframes gridShift {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 40px;
+            animation: slideDown 0.6s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        h1 {
+            font-size: 2.5em;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: -1px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+            font-weight: 300;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .panel {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 16px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+            animation: fadeInUp 0.6s ease-out;
+            transition: border-color 0.3s ease;
+        }
+
+        .panel:hover {
+            border-color: rgba(0, 217, 255, 0.5);
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .panel-title {
+            font-size: 1.4em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--primary);
+        }
+
+        .icon {
+            width: 24px;
+            height: 24px;
+            display: inline-block;
+        }
+
+        .scan-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 10px;
+            color: var(--dark-bg);
+            font-size: 1.05em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 20px rgba(0, 217, 255, 0.3);
+        }
+
+        .scan-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 30px rgba(0, 217, 255, 0.4);
+        }
+
+        .scan-button:active {
+            transform: translateY(0);
+        }
+
+        .scan-button.scanning {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        .network-item {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(0, 217, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .network-item::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 3px;
+            background: var(--primary);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .network-item:hover {
+            background: rgba(0, 217, 255, 0.1);
+            border-color: rgba(0, 217, 255, 0.3);
+            transform: translateX(4px);
+        }
+
+        .network-item:hover::before {
+            opacity: 1;
+        }
+
+        .network-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .network-name {
+            font-weight: 600;
+            font-size: 1.05em;
+        }
+
+        .network-signal {
+            display: flex;
+            gap: 2px;
+            font-size: 12px;
+        }
+
+        .signal-bar {
+            width: 3px;
+            height: 12px;
+            background: rgba(0, 217, 255, 0.3);
+            border-radius: 1px;
+            transition: all 0.3s ease;
+        }
+
+        .network-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9em;
+            color: var(--text-secondary);
+        }
+
+        .security-badge {
+            display: inline-block;
+            background: rgba(108, 92, 231, 0.3);
+            color: var(--secondary);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: 500;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(5px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .modal.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--card-bg);
+            border: 1px solid rgba(0, 217, 255, 0.3);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .modal-header {
+            font-size: 1.6em;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: var(--primary);
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5em;
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .modal-close:hover {
+            color: var(--primary);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.95em;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 1em;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(0, 217, 255, 0.2);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .connect-btn {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--success), #27ae60);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            font-size: 1.05em;
+            transition: all 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .connect-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(46, 204, 113, 0.3);
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.3);
+            border-radius: 8px;
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+
+        .history-network {
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .history-time {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 40px 20px;
+            font-size: 1.05em;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 600px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: rgba(0, 217, 255, 0.1);
+            border: 1px solid rgba(0, 217, 255, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 4px;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .footer {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-top: 40px;
+            font-size: 0.9em;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 217, 255, 0.2);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌐 WiFi Connection Agent</h1>
+            <p class="subtitle">Secure network scanning and management system</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Networks Scanner Panel -->
+            <div class="panel">
+                <div class="panel-title">
+                    📡 Available Networks
+                </div>
+                <button class="scan-button" id="scanBtn">Scan Networks</button>
+                <div id="networkList" class="empty-state">
+                    Click "Scan Networks" to find available WiFi networks
+                </div>
+            </div>
+
+            <!-- Active Connection & History -->
+            <div class="panel">
+                <div class="panel-title">
+                    ✓ Connection Status
+                </div>
+                <div id="statusContainer"></div>
+                
+                <div style="margin-top: 30px;">
+                    <div style="font-weight: 600; margin-bottom: 15px; color: var(--primary);">Recent Connections</div>
+                    <div id="historyList" class="empty-state" style="padding: 20px; font-size: 0.9em;">No connection history yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Panel -->
+        <div class="panel">
+            <div class="panel-title">📊 Connection Statistics</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalScans">0</div>
+                    <div class="stat-label">Total Scans</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="connectedCount">0</div>
+                    <div class="stat-label">Connected</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="uptime">0h</div>
+                    <div class="stat-label">Uptime</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>WiFi Agent v1.0 | Secure Wireless Connection Management</p>
+        </div>
+    </div>
+
+    <!-- Connection Modal -->
+    <div class="modal" id="connectionModal">
+        <div class="modal-content">
+            <button class="modal-close" id="closeModal">×</button>
+            <div class="modal-header">Connect to Network</div>
+            
+            <div class="form-group">
+                <label>Network Name</label>
+                <input type="text" id="networkName" readonly style="background: rgba(255, 255, 255, 0.02); cursor: not-allowed;">
+            </div>
+
+            <div class="form-group">
+                <label>Security Type</label>
+                <select id="securityType">
+                    <option value="WPA2">WPA2</option>
+                    <option value="WPA3">WPA3</option>
+                    <option value="Open">Open Network</option>
+                </select>
+            </div>
+
+            <div id="passwordGroup" class="form-group">
+                <label>Password</label>
+                <input type="password" id="networkPassword" placeholder="Enter WiFi password">
+                <div class="checkbox-group" style="margin-top: 8px;">
+                    <input type="checkbox" id="showPassword">
+                    <label for="showPassword" style="margin-bottom: 0;">Show password</label>
+                </div>
+            </div>
+
+            <div class="checkbox-group">
+                <input type="checkbox" id="saveBefore" checked>
+                <label for="saveBefore" style="margin-bottom: 0;">Save this network for future use</label>
+            </div>
+
+            <button class="connect-btn" id="connectBtn">Connect</button>
+        </div>
+    </div>
+
+    <script>
+        // Application State
+        const state = {
+            networks: [],
+            currentConnection: null,
+            connectionHistory: [],
+            stats: {
+                totalScans: 0,
+                connectedCount: 0,
+                startTime: Date.now()
+            },
+            savedNetworks: JSON.parse(localStorage.getItem('savedNetworks') || '[]')
+        };
+
+        // Mock network data
+        const mockNetworks = [
+            { name: 'HomeNetwork_2.4GHz', signal: 85, security: 'WPA2', channel: 6, frequency: '2.4GHz' },
+            { name: 'CoffeeShop_Public', signal: 60, security: 'Open', channel: 11, frequency: '2.4GHz' },
+            { name: 'OfficeWiFi_Secure', signal: 75, security: 'WPA3', channel: 36, frequency: '5GHz' },
+            { name: 'Guest_Network', signal: 55, security: 'WPA2', channel: 44, frequency: '5GHz' },
+            { name: 'Lab_Equipment', signal: 40, security: 'WPA3', channel: 149, frequency: '5GHz' },
+            { name: 'Router_Backup', signal: 35, security: 'WPA2', channel: 9, frequency: '2.4GHz' }
+        ];
+
+        // Initialize
+        document.getElementById('scanBtn').addEventListener('click', scanNetworks);
+        document.getElementById('closeModal').addEventListener('click', closeModal);
+        document.getElementById('showPassword').addEventListener('change', togglePassword);
+        document.getElementById('connectBtn').addEventListener('click', connectToNetwork);
+        document.getElementById('securityType').addEventListener('change', updatePasswordField);
+
+        function scanNetworks() {
+            const btn = document.getElementById('scanBtn');
+            btn.classList.add('scanning');
+            btn.textContent = 'Scanning...';
+
+            // Simulate scan delay
+            setTimeout(() => {
+                state.networks = mockNetworks.map(net => ({
+                    ...net,
+                    signal: Math.max(20, net.signal + Math.random() * 20 - 10)
+                }));
+                state.stats.totalScans++;
+                
+                displayNetworks();
+                updateStats();
+                
+                btn.classList.remove('scanning');
+                btn.textContent = 'Scan Networks';
+            }, 1500);
+        }
+
+        function displayNetworks() {
+            const container = document.getElementById('networkList');
+            
+            if (state.networks.length === 0) {
+                container.innerHTML = '<div class="empty-state">No networks found</div>';
+                return;
+            }
+
+            container.innerHTML = state.networks
+                .sort((a, b) => b.signal - a.signal)
+                .map((net, idx) => {
+                    const signalBars = Array(5).fill(0).map((_, i) => 
+                        `<div class="signal-bar" style="opacity: ${i < Math.ceil((net.signal / 100) * 5) ? '1' : '0.3'}"></div>`
+                    ).join('');
+
+                    return `
+                        <div class="network-item" onclick="selectNetwork('${net.name}', '${net.security}')">
+                            <div class="network-header">
+                                <span class="network-name">${net.name}</span>
+                                <div class="network-signal">${signalBars}</div>
+                            </div>
+                            <div class="network-info">
+                                <span><strong>${Math.round(net.signal)}%</strong> signal</span>
+                                <span class="security-badge">${net.security}</span>
+                                <span>Ch. ${net.channel} (${net.frequency})</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+        }
+
+        function selectNetwork(name, security) {
+            document.getElementById('networkName').value = name;
+            document.getElementById('securityType').value = security;
+            updatePasswordField();
+            document.getElementById('connectionModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('connectionModal').classList.remove('active');
+            document.getElementById('networkPassword').value = '';
+        }
+
+        function togglePassword() {
+            const input = document.getElementById('networkPassword');
+            input.type = document.getElementById('showPassword').checked ? 'text' : 'password';
+        }
+
+        function updatePasswordField() {
+            const security = document.getElementById('securityType').value;
+            const group = document.getElementById('passwordGroup');
+            group.style.display = security === 'Open' ? 'none' : 'block';
+        }
+
+        function connectToNetwork() {
+            const name = document.getElementById('networkName').value;
+            const password = document.getElementById('networkPassword').value;
+            const security = document.getElementById('securityType').value;
+
+            if (security !== 'Open' && !password) {
+                alert('Please enter a password');
+                return;
+            }
+
+            // Simulate connection
+            document.getElementById('connectBtn').disabled = true;
+            document.getElementById('connectBtn').innerHTML = '<span class="loading-spinner"></span> Connecting...';
+
+            setTimeout(() => {
+                state.currentConnection = {
+                    name: name,
+                    security: security,
+                    connectedAt: new Date(),
+                    ip: `192.168.1.${Math.floor(Math.random() * 255)}`
+                };
+
+                state.connectionHistory.unshift({
+                    name: name,
+                    time: new Date(),
+                    duration: Math.floor(Math.random() * 180) + 30
+                });
+
+                if (document.getElementById('saveBefore').checked) {
+                    state.savedNetworks.push({ name, security });
+                    localStorage.setItem('savedNetworks', JSON.stringify(state.savedNetworks));
+                }
+
+                state.stats.connectedCount++;
+
+                displayStatus();
+                displayHistory();
+                updateStats();
+                closeModal();
+
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('connectBtn').innerHTML = 'Connect';
+            }, 2000);
+        }
+
+        function displayStatus() {
+            const container = document.getElementById('statusContainer');
+            
+            if (!state.currentConnection) {
+                container.innerHTML = '<div class="empty-state">Not connected to any network</div>';
+                return;
+            }
+
+            const conn = state.currentConnection;
+            const connected = new Date() - conn.connectedAt;
+            const hours = Math.floor(connected / 3600000);
+            const mins = Math.floor((connected % 3600000) / 60000);
+
+            container.innerHTML = `
+                <div class="connection-status">
+                    <div class="status-dot"></div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--success);">Connected</div>
+                        <div style="font-size: 0.9em; color: var(--text-secondary);">${connected < 60000 ? 'Just now' : `${hours}h ${mins}m ago`}</div>
+                    </div>
+                </div>
+                <div style="background: rgba(255, 255, 255, 0.03); border-radius: 8px; padding: 12px; font-size: 0.9em;">
+                    <div><strong>${conn.name}</strong></div>
+                    <div style="color: var(--text-secondary); margin-top: 4px;">
+                        ${conn.security === 'Open' ? '🔓 Open' : '🔐 ' + conn.security}<br>
+                        IP: ${conn.ip}
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayHistory() {
+            const container = document.getElementById('historyList');
+            
+            if (state.connectionHistory.length === 0) {
+                container.innerHTML = '<div class="empty-state" style="padding: 20px; font-size: 0.9em;">No connection history yet</div>';
+                return;
+            }
+
+            container.innerHTML = state.connectionHistory.slice(0, 5).map(hist => `
+                <div class="history-item">
+                    <span class="history-network">${hist.name}</span>
+                    <span class="history-time">${hist.time.toLocaleTimeString()}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateStats() {
+            const uptime = Math.floor((Date.now() - state.stats.startTime) / 3600000);
+            document.getElementById('totalScans').textContent = state.stats.totalScans;
+            document.getElementById('connectedCount').textContent = state.stats.connectedCount;
+            document.getElementById('uptime').textContent = uptime + 'h';
+        }
+
+        // Initial display
+        displayStatus();
+        displayHistory();
+        updateStats();
+    </script>
+</body>
+</html>
